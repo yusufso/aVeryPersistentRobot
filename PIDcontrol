@@ -1,0 +1,158 @@
+//PID controller constants
+float Kp = 100.0;
+float Kd = 10.0;
+float Ki = 0.8;
+
+//setPoint is 0 degrees, 511 is the analog bit equivalent
+int setPoint = 511;
+  
+//The error recorded from the previous interval
+int previousError = 0;
+
+//The total integral of error over time so far
+int previousArea = 0;
+
+//Time between each measurement and correction
+int intervalTime = 1;
+
+
+
+#define pinWheelR1 8
+#define pinWheelR2 3
+#define pinWheelL1 10
+#define pinWheelL2 9
+#define pinWheelSpeedR 5
+#define pinWheelSpeedL 6
+#define pinGyroAngle 0
+
+//To move forward:
+//  R1: LOW R2: HIGH
+//  L1: HIGH L2: LOW
+
+//To move back:
+//  R1: HIGH R2: LOW
+//  L1: LOW L2: HIGH
+
+
+
+void setup() {
+  //pin setup
+  pinMode(pinWheelR1, OUTPUT);
+  pinMode(pinWheelR2, OUTPUT);
+  pinMode(pinWheelL1, OUTPUT);
+  pinMode(pinWheelL2, OUTPUT);
+  pinMode(pinWheelSpeedR, OUTPUT);
+  pinMode(pinWheelSpeedL, OUTPUT);
+  
+  pinMode(pinGyroAngle, INPUT);
+
+
+  //Begin serial interface
+  Serial.begin(9600);
+}
+
+void loop() {
+  //get angle from pinGyroAngle
+  int analogAngle = analogRead(pinGyroAngle);
+  //0 to 510 bits is a forward tilt
+  //511 is vertical
+  //512 to 1023 bits is a backward tilt
+
+  
+  //getting error from feedback 
+  int error = setPoint - analogAngle;
+  //positive error = backwards tilt
+  //negative error = forwards tilt
+  
+  
+  
+  
+  
+  //applying Kp, Ki and Kd 
+  
+  //NOTE: although Ki, Kd and Kp are float types and the calculations
+  //assign to integer variables, by C's design when a calculation is 
+  //done with both integers and floats, the integers are converted to
+  //float by default. Furthermore, also by default, when a float is 
+  //assigned to an integer variable it gets rounded to the nearest.
+  
+  //current error * Kp
+  int pCorrection = error * Kp;
+  //current interval's trapezium area * Ki
+  //0.5 * (a + b) * h * Ki                        
+  int iTrapeziumArea = 0.5 * (previousError + error) * intervalTime; 
+  int iCorrection = (previousArea + iTrapeziumArea) * Ki;
+  //current interval's gradient * kd
+  int dDeriv = ((error - previousError)/intervalTime);
+  int dCorrection = dDeriv * Kd;
+
+  //Adding individual P, I and D corrections to total correction
+  int correction = pCorrection + iCorrection + dCorrection;
+  
+  //refresh variables for next interval
+  previousError = error;
+  previousArea = previousArea + iTrapeziumArea;
+
+
+
+
+  //correction is positive/negative to deduce the direction
+  //of motor rotation.
+  //We don't need that as we use error to dictate the direction.
+  //Therefore correction is only needed for its magnitude
+  //so we will get its absolute value.
+  correction = abs(correction);
+  
+  //Now scale correction down to 0 to 255 bits dividing by
+  //maximum possible correction and multiplying
+  //by 255 because pinWheelSpeed can only take 0 to 255 bits
+  //Area is assumed to be 0 because its a negative feedback
+  //loop. Ideally, we should be getting area of sin(kx) 0
+  //to 90 degrees as that is the max iCorrection but that
+  //requires further testing to find k. dy/dx is 0 at max
+  //correction so dCorrection is assumed to be 0 too.
+  int wheelSpeed = (correction/(512 * Kp)) * 255;
+  
+  //deadband zones
+  int lowerDeadband = setPoint - 40;
+  int upperDeadband = setPoint + 40;
+  
+  
+  
+  
+  
+  //if it is tilting forward(negative correction), go forward
+  if (analogAngle < lowerDeadband){
+    Serial.println("moving forward");
+    digitalWrite(pinWheelR1, LOW);
+    digitalWrite(pinWheelR2, HIGH);
+    digitalWrite(pinWheelL1, HIGH);
+    digitalWrite(pinWheelL2, LOW);
+
+    //setMotorSpeed(wheelSpeed)
+    analogWrite(pinWheelSpeedR, wheelSpeed);
+    analogWrite(pinWheelSpeedL, wheelSpeed);
+  }
+  //if it is tilting backward(positive correction), go back
+  if (analogAngle > upperDeadband){
+    Serial.println("moving backward");
+    digitalWrite(pinWheelR1, HIGH);
+    digitalWrite(pinWheelR2, LOW);
+    digitalWrite(pinWheelL1, LOW);
+    digitalWrite(pinWheelL2, HIGH);
+
+    //setMotorSpeed(wheelSpeed)
+    analogWrite(pinWheelSpeedR, wheelSpeed);
+    analogWrite(pinWheelSpeedL, wheelSpeed);
+  }
+  //if it's balanced, leave it
+  if (analogAngle >= lowerDeadband && analogAngle <= upperDeadband){
+    Serial.println("stable");
+    
+    //setMotorSpeed(wheelSpeed)
+    analogWrite(pinWheelSpeedR, 0);
+    analogWrite(pinWheelSpeedL, 0);
+  }
+
+  delay(intervalTime);
+}

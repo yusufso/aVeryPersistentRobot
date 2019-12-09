@@ -123,7 +123,7 @@ void loop() {
     analogWrite(pinWheelSpeedL, wheelSpeed);
   }
   //if it's balanced, leave it
-  if (error <= analogAngle && error <= upperDeadband){
+  if (analogAngle >= lowerDeadband && analogAngle <= upperDeadband){
     Serial.println("stable");
     
     //setMotorSpeed(0)

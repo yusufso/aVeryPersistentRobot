@@ -78,7 +78,7 @@ void loop() {
   pCorrection = abs(pCorrection);
   
   //Now scale pCorrection down to 0 to 255 bits dividing by
-  //maximum possible wheelSpeed/pCorrection and multiplying
+  //maximum possible pCorrection and multiplying
   //by 255 because pinWheelSpeed can only take 0 to 255 bits
   int wheelSpeed = pCorrection/(1023 * Kp) * 255;
   
